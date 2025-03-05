@@ -24,6 +24,8 @@ use Symfony\Component\DependencyInjection\Reference;
  */
 class InlineServiceDefinitionsPass extends AbstractRecursivePass
 {
+    protected bool $skipScalars = true;
+
     private ?AnalyzeServiceReferencesPass $analyzingPass;
     private array $cloningIds = [];
     private array $connectedIds = [];
@@ -32,7 +34,7 @@ class InlineServiceDefinitionsPass extends AbstractRecursivePass
     private array $notInlinableIds = [];
     private ?ServiceReferenceGraph $graph = null;
 
-    public function __construct(AnalyzeServiceReferencesPass $analyzingPass = null)
+    public function __construct(?AnalyzeServiceReferencesPass $analyzingPass = null)
     {
         $this->analyzingPass = $analyzingPass;
     }
@@ -222,6 +224,8 @@ class InlineServiceDefinitionsPass extends AbstractRecursivePass
             return false;
         }
 
-        return $this->container->getDefinition($srcId)->isShared();
+        $srcDefinition = $this->container->getDefinition($srcId);
+
+        return $srcDefinition->isShared() && !$srcDefinition->isLazy();
     }
 }

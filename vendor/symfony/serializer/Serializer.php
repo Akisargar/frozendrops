@@ -84,10 +84,12 @@ class Serializer implements SerializerInterface, ContextAwareNormalizerInterface
     /**
      * @param array<NormalizerInterface|DenormalizerInterface> $normalizers
      * @param array<EncoderInterface|DecoderInterface>         $encoders
+     * @param array<string, mixed>                             $defaultContext
      */
     public function __construct(
         private array $normalizers = [],
         array $encoders = [],
+        private array $defaultContext = [],
     ) {
         foreach ($normalizers as $normalizer) {
             if ($normalizer instanceof SerializerAwareInterface) {
@@ -152,7 +154,7 @@ class Serializer implements SerializerInterface, ContextAwareNormalizerInterface
         return $this->denormalize($data, $type, $format, $context);
     }
 
-    public function normalize(mixed $data, string $format = null, array $context = []): array|string|int|float|bool|\ArrayObject|null
+    public function normalize(mixed $data, ?string $format = null, array $context = []): array|string|int|float|bool|\ArrayObject|null
     {
         // If a normalizer supports the given data, use it
         if ($normalizer = $this->getNormalizer($data, $format, $context)) {
@@ -163,12 +165,12 @@ class Serializer implements SerializerInterface, ContextAwareNormalizerInterface
             return $data;
         }
 
-        if (\is_array($data) && !$data && ($context[self::EMPTY_ARRAY_AS_OBJECT] ?? false)) {
+        if (\is_array($data) && !$data && ($context[self::EMPTY_ARRAY_AS_OBJECT] ?? $this->defaultContext[self::EMPTY_ARRAY_AS_OBJECT] ?? false)) {
             return new \ArrayObject();
         }
 
         if (is_iterable($data)) {
-            if ($data instanceof \Countable && ($context[AbstractObjectNormalizer::PRESERVE_EMPTY_OBJECTS] ?? false) && !\count($data)) {
+            if ($data instanceof \Countable && ($context[AbstractObjectNormalizer::PRESERVE_EMPTY_OBJECTS] ?? $this->defaultContext[AbstractObjectNormalizer::PRESERVE_EMPTY_OBJECTS] ?? false) && !\count($data)) {
                 return new \ArrayObject();
             }
 
@@ -193,8 +195,9 @@ class Serializer implements SerializerInterface, ContextAwareNormalizerInterface
 
     /**
      * @throws NotNormalizableValueException
+     * @throws PartialDenormalizationException Occurs when one or more properties of $type fails to denormalize
      */
-    public function denormalize(mixed $data, string $type, string $format = null, array $context = []): mixed
+    public function denormalize(mixed $data, string $type, ?string $format = null, array $context = []): mixed
     {
         if (isset($context[DenormalizerInterface::COLLECT_DENORMALIZATION_ERRORS], $context['not_normalizable_value_exceptions'])) {
             throw new LogicException('Passing a value for "not_normalizable_value_exceptions" context key is not allowed.');
@@ -219,7 +222,7 @@ class Serializer implements SerializerInterface, ContextAwareNormalizerInterface
             throw new NotNormalizableValueException(sprintf('Could not denormalize object of type "%s", no supporting normalizer found.', $type));
         }
 
-        if (isset($context[DenormalizerInterface::COLLECT_DENORMALIZATION_ERRORS])) {
+        if (isset($context[DenormalizerInterface::COLLECT_DENORMALIZATION_ERRORS]) || isset($this->defaultContext[DenormalizerInterface::COLLECT_DENORMALIZATION_ERRORS])) {
             unset($context[DenormalizerInterface::COLLECT_DENORMALIZATION_ERRORS]);
             $context['not_normalizable_value_exceptions'] = [];
             $errors = &$context['not_normalizable_value_exceptions'];
@@ -251,12 +254,12 @@ class Serializer implements SerializerInterface, ContextAwareNormalizerInterface
         return ['*' => false];
     }
 
-    public function supportsNormalization(mixed $data, string $format = null, array $context = []): bool
+    public function supportsNormalization(mixed $data, ?string $format = null, array $context = []): bool
     {
         return null !== $this->getNormalizer($data, $format, $context);
     }
 
-    public function supportsDenormalization(mixed $data, string $type, string $format = null, array $context = []): bool
+    public function supportsDenormalization(mixed $data, string $type, ?string $format = null, array $context = []): bool
     {
         return isset(self::SCALAR_TYPES[$type]) || null !== $this->getDenormalizer($data, $type, $format, $context);
     }
